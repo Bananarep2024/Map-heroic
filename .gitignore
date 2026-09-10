@@ -39,6 +39,10 @@ ExportedObj/
 # Rapport de crash Unity
 sysinfo.txt
 
+# Script temporaire injecte puis supprime par Unity Hub a chaque ouverture
+/[Aa]ssets/[Ee]ditor/HubForceResolve.cs
+/[Aa]ssets/[Ee]ditor/HubForceResolve.cs.meta
+
 # Builds
 *.apk
 *.aab
