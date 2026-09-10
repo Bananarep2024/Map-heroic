@@ -69,3 +69,6 @@ Thumbs.db
 desktop.ini
 .vscode/
 .idea/
+
+# Binaires compilés à la racine (accident de redirection)
+/-

@@ -20,8 +20,24 @@ namespace MapHeroic.Generation.Terrain
         public int PartColline = 12;
         public int PartArgileuse = 10;
 
-        /// <summary>Prime accordée à un terrain déjà présent chez une voisine : forme les biomes.</summary>
-        public float BonusContiguite = 0.15f;
+        /// <summary>
+        /// Prime accordée par zone voisine portant déjà le même terrain. C'est elle qui forme
+        /// les biomes. À 0,15 elle ne pesait rien face à des aptitudes comprises entre 0,6 et
+        /// 2,2 ; à 0,45, trois voisines de même terrain l'emportent sur un écart d'aptitude
+        /// ordinaire, ce qui suffit à agglomérer les régions sans forcer un terrain là où le
+        /// sol s'y prête vraiment mal.
+        /// </summary>
+        public float BonusContiguite = 0.45f;
+
+        /// <summary>Passes d'échange pour affiner les régions après la croissance.</summary>
+        public int PassesRegroupement = 4;
+
+        /// <summary>
+        /// Nombre de zones visé par région d'un même terrain. Il fixe combien de foyers on
+        /// sème : dix-neuf zones de forêt pour une taille visée de six donnent trois massifs
+        /// boisés, ce qui se lit, plutôt que dix-neuf taches, ce qui ne se lit pas.
+        /// </summary>
+        public int TailleRegionVisee = 6;
 
         /// <summary>
         /// Part de cellules de plage à partir de laquelle une zone est dite côtière.
@@ -42,6 +58,11 @@ namespace MapHeroic.Generation.Terrain
         public int NbZonesSansRessource;
         public int NbVoisinagesSansRessource;
         public int NbPonts;
+        public int EchangesRegroupement;
+        public int NbRegions;
+
+        /// <summary>Part des frontières de zones séparant deux terrains différents.</summary>
+        public float PartFrontieresEntreTerrains;
         public long Millisecondes;
 
         public override string ToString()
@@ -53,8 +74,9 @@ namespace MapHeroic.Generation.Terrain
                 if (Compte[i] > 0) parts.Add($"{Compte[i]} {Terrains.Nom((TypeTerrain)i)}");
             }
             return $"terrains : {string.Join(", ", parts)} ; {NbZonesSansRessource} zones sans ressource " +
-                   $"({NbVoisinagesSansRessource} voisinages stériles), {NbPonts} emplacements de pont, " +
-                   $"{Millisecondes} ms";
+                   $"({NbVoisinagesSansRessource} voisinages stériles), {NbPonts} emplacements de pont ; " +
+                   $"{NbRegions} régions semées, {EchangesRegroupement} échanges, {PartFrontieresEntreTerrains:P0} " +
+                   $"des frontières séparent deux terrains, {Millisecondes} ms";
         }
     }
 
@@ -239,38 +261,8 @@ namespace MapHeroic.Generation.Terrain
             plafonds[(int)TypeTerrain.Colline] = reste * p.PartColline / total + 4;
             plafonds[(int)TypeTerrain.PlaineArgileuse] = reste * p.PartArgileuse / total + 4;
 
-            // Couples (zone, terrain) classés par aptitude décroissante. Le bonus de
-            // contiguïté est réévalué au moment de poser, pas au moment de classer : c'est
-            // ce qui fait grandir les biomes de proche en proche.
-            var candidats = new List<(int zone, TypeTerrain terrain, float aptitude)>(n * 6);
-            for (int z = 0; z < n; z++)
-            {
-                if (affectee[z]) continue;
-                foreach (TypeTerrain t in TerrainsPossibles(p, z, interdites))
-                {
-                    candidats.Add((z, t, Aptitude(stats[z], t, p)));
-                }
-            }
-            candidats.Sort((a, b) =>
-            {
-                if (a.aptitude != b.aptitude) return b.aptitude < a.aptitude ? -1 : 1;
-                if (a.zone != b.zone) return a.zone < b.zone ? -1 : 1;
-                return (int)a.terrain - (int)b.terrain;
-            });
-
-            foreach (var (zone, terrain, aptitude) in candidats)
-            {
-                if (affectee[zone]) continue;
-                int index = (int)terrain;
-                if (quota[index] >= plafonds[index]) continue;
-
-                float avecBonus = aptitude + p.BonusContiguite * VoisinesDuMemeTerrain(carte, terrains, affectee, zone, terrain);
-                if (avecBonus < aptitude) continue;      // garde-fou, jamais atteint
-
-                terrains[zone] = terrain;
-                affectee[zone] = true;
-                quota[index]++;
-            }
+            var verrouillee = (bool[])affectee.Clone();   // montagnes et zones de départ
+            FaireCroitreLesRegions(carte, p, stats, interdites, terrains, affectee, quota, plafonds, diag);
 
             // Les zones qu'aucun quota n'a pu prendre reçoivent le terrain le plus disponible.
             for (int z = 0; z < n; z++)
@@ -289,7 +281,246 @@ namespace MapHeroic.Generation.Terrain
                 quota[(int)repli]++;
             }
 
+            RegrouperEnBiomes(carte, p, stats, interdites, verrouillee, terrains, diag);
             return terrains;
+        }
+
+        /// <summary>
+        /// Regroupe les terrains en régions cohérentes par échanges entre zones.
+        ///
+        /// La première version ajoutait une prime de contiguïté au moment de choisir le
+        /// terrain d'une zone — mais la liste des candidats était triée une fois pour toutes
+        /// sur la seule aptitude, si bien que la prime ne changeait jamais l'ordre et ne
+        /// servait à rien. Résultat : des terrains éparpillés au hasard, une carte qui
+        /// ressemblait à un motif de camouflage plutôt qu'à un paysage.
+        ///
+        /// Échanger DEUX zones plutôt que réaffecter une seule a une vertu décisive : cela
+        /// laisse les quotas rigoureusement inchangés. On peut donc chercher la meilleure
+        /// disposition sans jamais avoir à revérifier la répartition des terrains.
+        /// </summary>
+        static void RegrouperEnBiomes(Carte carte, ParametresTerrains p, StatistiqueZone[] stats,
+                                      bool[] interdites, bool[] verrouillee, TypeTerrain[] terrains,
+                                      DiagnosticTerrains diag)
+        {
+            int n = carte.NbZones;
+
+            float Score(int zone, TypeTerrain terrain)
+            {
+                if (verrouillee[zone]) return float.MinValue;
+                if (interdites[zone] && (terrain == TypeTerrain.Desert || terrain == TypeTerrain.Marais))
+                {
+                    return float.MinValue;
+                }
+
+                int voisinesIdentiques = 0;
+                foreach (int v in carte.ZonesVoisines[zone])
+                {
+                    if (terrains[v] == terrain) voisinesIdentiques++;
+                }
+                return Aptitude(stats[zone], terrain, p) + p.BonusContiguite * voisinesIdentiques;
+            }
+
+            for (int passe = 0; passe < p.PassesRegroupement; passe++)
+            {
+                int echanges = 0;
+
+                for (int a = 0; a < n; a++)
+                {
+                    if (verrouillee[a]) continue;
+                    for (int b = a + 1; b < n; b++)
+                    {
+                        if (verrouillee[b]) continue;
+                        TypeTerrain ta = terrains[a], tb = terrains[b];
+                        if (ta == tb) continue;
+
+                        float avant = Score(a, ta) + Score(b, tb);
+                        if (float.IsNegativeInfinity(avant)) continue;
+
+                        terrains[a] = tb;
+                        terrains[b] = ta;
+                        float apres = Score(a, tb) + Score(b, ta);
+
+                        if (apres > avant + 1e-4f) echanges++;
+                        else { terrains[a] = ta; terrains[b] = tb; }
+                    }
+                }
+
+                diag.EchangesRegroupement += echanges;
+                if (echanges == 0) break;
+            }
+
+            // Mesure du résultat : part des frontières entre zones qui séparent deux terrains
+            // différents. Plus elle est basse, plus les régions sont franches.
+            int frontieres = 0, differentes = 0;
+            for (int z = 0; z < n; z++)
+            {
+                foreach (int v in carte.ZonesVoisines[z])
+                {
+                    if (v <= z) continue;
+                    frontieres++;
+                    if (terrains[z] != terrains[v]) differentes++;
+                }
+            }
+            diag.PartFrontieresEntreTerrains = frontieres > 0 ? (float)differentes / frontieres : 0f;
+        }
+
+        /// <summary>
+        /// Fait pousser les terrains en régions, depuis quelques germes par type.
+        ///
+        /// Affecter le terrain zone par zone, puis tenter de recoller par échanges, plafonnait
+        /// à une frontière sur deux séparant deux terrains différents — la carte gardait
+        /// l'aspect d'un damier. C'est le principe même qui était mauvais : la cohérence d'une
+        /// région ne se rattrape pas après coup, elle se construit.
+        ///
+        /// On sème donc quelques foyers par terrain, espacés, puis on les fait croître de
+        /// proche en proche jusqu'à épuiser les quotas, en préférant à chaque pas la zone la
+        /// plus apte. C'est le même mécanisme qu'en P5 pour les zones, appliqué un cran plus
+        /// haut. Nombre de germes = quota / taille de région visée : dix-neuf zones de forêt
+        /// donnent trois massifs boisés d'environ six zones, et non dix-neuf taches.
+        /// </summary>
+        static void FaireCroitreLesRegions(Carte carte, ParametresTerrains p, StatistiqueZone[] stats,
+                                           bool[] interdites, TypeTerrain[] terrains, bool[] affectee,
+                                           int[] quota, int[] plafonds, DiagnosticTerrains diag)
+        {
+            int n = carte.NbZones;
+
+            // La côte n'est pas une région à faire pousser : c'est un liseré, et elle est
+            // définie par un fait géographique — la part de plage. On l'attribue donc
+            // directement aux zones les plus littorales, avant tout le reste. La faire
+            // croître comme les autres la poussait vers l'intérieur des terres et ne lui
+            // laissait que deux zones sur les onze prévues.
+            AttribuerLeLittoral(carte, p, stats, terrains, affectee, quota, plafonds);
+
+            var file = new FilePrioriteMin(n * 4);
+            var entreeZone = new List<int>(n * 4);
+            var entreeTerrain = new List<TypeTerrain>(n * 4);
+            var entreeDistance = new List<int>(n * 4);
+
+            void Pousser(int zone, TypeTerrain terrain, int distance)
+            {
+                entreeZone.Add(zone);
+                entreeTerrain.Add(terrain);
+                entreeDistance.Add(distance);
+
+                // La clé est d'abord la DISTANCE au foyer, l'aptitude ne servant qu'à
+                // départager. Trier sur la seule aptitude, comme au premier essai, revenait à
+                // laisser chaque terrain rafler ses meilleures zones où qu'elles soient : on
+                // retrouvait l'éparpillement qu'on voulait supprimer.
+                file.Empiler(distance * 10f - Aptitude(stats[zone], terrain, p), entreeZone.Count - 1);
+            }
+
+            foreach (TypeTerrain terrain in new[]
+            {
+                TypeTerrain.Desert, TypeTerrain.Marais, TypeTerrain.Foret,
+                TypeTerrain.PlaineFertile, TypeTerrain.Colline, TypeTerrain.PlaineArgileuse
+            })
+            {
+                int restant = plafonds[(int)terrain] - quota[(int)terrain];
+                if (restant <= 0) continue;
+
+                int nbGermes = math.clamp((int)math.round(restant / (float)p.TailleRegionVisee), 1, 4);
+                var germes = ChoisirGermes(carte, p, stats, interdites, affectee, terrain, nbGermes);
+
+                foreach (int germe in germes)
+                {
+                    if (affectee[germe] || quota[(int)terrain] >= plafonds[(int)terrain]) continue;
+                    terrains[germe] = terrain;
+                    affectee[germe] = true;
+                    quota[(int)terrain]++;
+                    diag.NbRegions++;
+                    foreach (int voisine in carte.ZonesVoisines[germe])
+                    {
+                        if (!affectee[voisine] && Autorise(p, interdites, voisine, terrain)) Pousser(voisine, terrain, 1);
+                    }
+                }
+            }
+
+            while (file.Depiler(out _, out int entree))
+            {
+                int zone = entreeZone[entree];
+                TypeTerrain terrain = entreeTerrain[entree];
+                if (affectee[zone]) continue;
+                if (quota[(int)terrain] >= plafonds[(int)terrain]) continue;
+
+                terrains[zone] = terrain;
+                affectee[zone] = true;
+                quota[(int)terrain]++;
+
+                int distance = entreeDistance[entree] + 1;
+                foreach (int voisine in carte.ZonesVoisines[zone])
+                {
+                    if (!affectee[voisine] && Autorise(p, interdites, voisine, terrain)) Pousser(voisine, terrain, distance);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Attribue le terrain Côte aux zones les plus littorales, par part de plage
+        /// décroissante. C'est un constat géographique, pas un choix d'aménagement.
+        /// </summary>
+        static void AttribuerLeLittoral(Carte carte, ParametresTerrains p, StatistiqueZone[] stats,
+                                        TypeTerrain[] terrains, bool[] affectee, int[] quota, int[] plafonds)
+        {
+            var littorales = new List<int>(carte.NbZones);
+            for (int z = 0; z < carte.NbZones; z++)
+            {
+                if (affectee[z] || stats[z].PartPlage < p.PartPlageCote) continue;
+                littorales.Add(z);
+            }
+            littorales.Sort((a, b) =>
+            {
+                if (stats[a].PartPlage != stats[b].PartPlage) return stats[b].PartPlage < stats[a].PartPlage ? -1 : 1;
+                return a < b ? -1 : (a > b ? 1 : 0);
+            });
+
+            foreach (int z in littorales)
+            {
+                if (quota[(int)TypeTerrain.Cote] >= plafonds[(int)TypeTerrain.Cote]) break;
+                terrains[z] = TypeTerrain.Cote;
+                affectee[z] = true;
+                quota[(int)TypeTerrain.Cote]++;
+            }
+        }
+
+        static bool Autorise(ParametresTerrains p, bool[] interdites, int zone, TypeTerrain terrain)
+        {
+            if (!interdites[zone]) return true;
+            return terrain != TypeTerrain.Desert && terrain != TypeTerrain.Marais;
+        }
+
+        /// <summary>
+        /// Foyers d'un terrain : les zones qui lui conviennent le mieux, jamais voisines entre
+        /// elles — deux germes mitoyens fusionneraient en une seule région et l'on n'aurait
+        /// pas la variété voulue.
+        /// </summary>
+        static List<int> ChoisirGermes(Carte carte, ParametresTerrains p, StatistiqueZone[] stats,
+                                       bool[] interdites, bool[] affectee, TypeTerrain terrain, int nbGermes)
+        {
+            var classement = new List<int>(carte.NbZones);
+            for (int z = 0; z < carte.NbZones; z++)
+            {
+                if (affectee[z] || !Autorise(p, interdites, z, terrain)) continue;
+                classement.Add(z);
+            }
+            classement.Sort((a, b) =>
+            {
+                float aa = Aptitude(stats[a], terrain, p), ab = Aptitude(stats[b], terrain, p);
+                if (aa != ab) return ab < aa ? -1 : 1;
+                return a < b ? -1 : (a > b ? 1 : 0);
+            });
+
+            var germes = new List<int>(nbGermes);
+            foreach (int candidat in classement)
+            {
+                if (germes.Count >= nbGermes) break;
+                bool voisinDUnGerme = false;
+                foreach (int germe in germes)
+                {
+                    if (carte.ZonesVoisines[candidat].Contains(germe)) { voisinDUnGerme = true; break; }
+                }
+                if (!voisinDUnGerme) germes.Add(candidat);
+            }
+            return germes;
         }
 
         static int CompterAffectees(bool[] affectee, int dejaComptees)
