@@ -10,7 +10,7 @@
 |---|---|---|
 | Principe directeur | **Une seule géométrie** : un maillage de cellules fines (Voronoi relaxé) porte la classification mer/terre, le relief, les 90 zones, les groupes, les frontières naturelles, le mesh 3D et les sources du navmesh | Aucune re-projection grille → polygones, obstacles du navmesh exacts par construction, une seule structure à déboguer pour un développeur solo |
 | Ordre des étapes | Géométrie → île → **relief et hydrologie** → zones → groupes → passages → matérialisation des frontières (avec sockets) → **départs (critères structurels)** → terrains et ressources → validation | Le relief précède les zones (leurs frontières l'épousent) ; les départs sont choisis avant les terrains pour que les contraintes désert/marais autour des départs soient appliquées en une seule passe |
-| Échantillonnage des cellules | Poisson-disc (Bridson) rayon **14 m** sur **1400 × 1400 m**, Delaunay (DelaunatorSharp, prédicats entiers) + Lloyd × 2 → ≈ 7 000 cellules (6 500-7 500), ≈ 2 200 sur terre, ≈ 25 par zone | Contours de zones organiques sans grille, granularité des cols/gués ≈ 14 m, équilibrage d'aire fin ; rayon 16 m conservé en paramètre de comparaison |
+| Échantillonnage des cellules | Poisson-disc (Bridson, k = 30) rayon **14 m** sur **1400 × 1400 m**, Delaunay (DelaunatorSharp adapté) + Lloyd × 2 → **≈ 6 200 cellules mesurées** (5 900-6 600 ; l'estimation initiale de 7 000 supposait un taux de remplissage trop élevé), ≈ 1 900 sur terre, ≈ 21 par zone | Contours de zones organiques sans grille, granularité des cols/gués ≈ 14 m, équilibrage d'aire fin ; rayon 16 m conservé en paramètre de comparaison |
 | Taille de la carte | 1400 × 1400 m, île ≈ 31 % de la surface (fenêtre acceptée 26-38 %), aire d'île ≈ 610 000 m², zone moyenne ≈ 6 750 m² | Une unité à 4 m/s traverse une zone (≈ 82 m) en ≈ 20 s : échelle Northgard ; l'île reste entourée d'une marge de mer ≥ 48 m (nominal ≈ 84 m) |
 | Obtention des 90 zones | **Agrégation** de cellules fines à partir de 90 germes répartis au prorata de l'aire des bassins hydrologiques (croissance « la plus petite d'abord », clé recalculée au dépilage, pondérée par crêtes et rivières) puis transferts de cellules de bord avec contrainte de dureté **molle** | Compte exact, connexité par construction, aire contrôlée à ± 25 % (marge sous les ± 30 %), pas d'échec dû aux bassins d'aire non multiple |
 | Groupes de 3-4 zones | Décomposition 3a + 4b = 90 libre, initialisation gloutonne, **recherche locale** (énergie : tailles, connexité, dureté des frontières, rivières naturelles intra-groupe, compacité), réparation des orphelines par **dissolution locale et re-partition exhaustive**, retirage borné | E < 1000 ⇒ zéro violation ; les frontières de groupes coïncident avec les barrières naturelles déjà présentes |
@@ -497,8 +497,8 @@ yield return op; NavMesh.AddNavMeshData(navMeshData);
 
 | Phase | Estimation |
 |---|---|
-| P1 Poisson-disc (7 000 points) | 8 ms |
-| P2 Delaunay × 3 (prédicats entiers) + Voronoi + CSR | 40 ms |
+| P1 Poisson-disc (≈ 6 200 points) | 8 ms *(mesuré 30 ms en éditeur Mono)* |
+| P2 Delaunay × 3 + Voronoï + CSR | 40 ms *(mesuré 25 ms en éditeur Mono)* |
 | P3 île + BFS + articulations | 6 ms |
 | P4 relief, priority-flood, flux (≈ 14 000 coins) | 15 ms |
 | P5 zones + équilibrage + articulations | 40 ms |
