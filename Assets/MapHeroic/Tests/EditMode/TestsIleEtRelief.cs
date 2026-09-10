@@ -16,9 +16,20 @@ namespace MapHeroic.Tests
     {
         const int NbGrainesCampagne = 40;
 
+        /// <summary>
+        /// La génération s'arrête à l'hydrologie : au-delà, la matérialisation creuse les
+        /// lits et surélève les massifs, si bien que les altitudes ne sont plus celles que
+        /// cette phase a produites. Vérifier ses invariants sur la carte finale reviendrait à
+        /// lui reprocher le travail des phases suivantes.
+        /// </summary>
+        static ParametresGeneration JusquALHydrologie()
+        {
+            return new ParametresGeneration { PhaseFinale = PhaseGeneration.Hydrologie };
+        }
+
         static Carte Generer(ulong graine, out RapportGeneration rapport)
         {
-            return GenerateurCarte.Generer(graine, new ParametresGeneration(), out rapport);
+            return GenerateurCarte.Generer(graine, JusquALHydrologie(), out rapport);
         }
 
         static Carte GenererValide(ulong graine)
@@ -100,7 +111,7 @@ namespace MapHeroic.Tests
         [Test]
         public void AucuneTerreContreLeBordDuDomaine()
         {
-            var p = new ParametresGeneration();
+            var p = JusquALHydrologie();
             var carte = GenerateurCarte.Generer(12UL, p, out _);
             Assert.IsNotNull(carte);
 
@@ -167,7 +178,7 @@ namespace MapHeroic.Tests
         [Test]
         public void CretesSurLaPartVisee()
         {
-            var p = new ParametresGeneration();
+            var p = JusquALHydrologie();
             GenerateurCarte.Generer(15UL, p, out RapportGeneration rapport);
             Assert.That(rapport.Relief.PartCellulesEnCrete, Is.InRange(0.20f, 0.30f),
                 $"Couverture des crêtes hors cible : {rapport.Relief}");
@@ -178,7 +189,7 @@ namespace MapHeroic.Tests
         {
             for (ulong graine = 16UL; graine < 20UL; graine++)
             {
-                var carte = GenerateurCarte.Generer(graine, new ParametresGeneration(), out RapportGeneration rapport);
+                var carte = GenerateurCarte.Generer(graine, JusquALHydrologie(), out RapportGeneration rapport);
                 Assert.IsNotNull(carte);
                 TestContext.WriteLine($"graine {graine} : {rapport.Relief}");
 
@@ -218,7 +229,7 @@ namespace MapHeroic.Tests
         public void ToutCoinPossedeUnCheminDescendantVersLaMer()
         {
             var carte = GenererValide(18UL);
-            GenerateurCarte.Generer(18UL, new ParametresGeneration(), out RapportGeneration rapport);
+            GenerateurCarte.Generer(18UL, JusquALHydrologie(), out RapportGeneration rapport);
 
             Assert.AreEqual(0, rapport.Hydrologie.NbCoinsSansEcoulement,
                 "Des coins n'ont aucun voisin plus bas : le comblement des dépressions a échoué.");
@@ -243,7 +254,7 @@ namespace MapHeroic.Tests
         {
             for (ulong graine = 20UL; graine < 26UL; graine++)
             {
-                GenerateurCarte.Generer(graine, new ParametresGeneration(), out RapportGeneration rapport);
+                GenerateurCarte.Generer(graine, JusquALHydrologie(), out RapportGeneration rapport);
                 Assert.That(rapport.Hydrologie.NbRivieres, Is.InRange(4, 6),
                     $"Graine {graine} : {rapport.Hydrologie}");
             }
@@ -336,7 +347,7 @@ namespace MapHeroic.Tests
         [Test]
         public void BudgetDeTempsRespecte()
         {
-            GenerateurCarte.Generer(31UL, new ParametresGeneration(), out RapportGeneration rapport);
+            GenerateurCarte.Generer(31UL, JusquALHydrologie(), out RapportGeneration rapport);
             TestContext.WriteLine(rapport.ToString());
             Assert.Less(rapport.MillisecondesTotal, 2000L, $"Trop lent : {rapport}");
         }

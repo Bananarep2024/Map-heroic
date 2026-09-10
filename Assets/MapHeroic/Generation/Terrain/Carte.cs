@@ -115,6 +115,34 @@ namespace MapHeroic.Generation.Terrain
         /// </summary>
         public bool[] CelluleReservee;
 
+        // -------------------------------------------------- P8 : matérialisation
+
+        /// <summary>Par cellule : <see cref="DrapeauxCellule"/> cumulés.</summary>
+        public ushort[] Drapeaux;
+
+        /// <summary>Par arête fine : nature de la frontière qui l'occupe.</summary>
+        public TypeFrontiere[] TypeArete;
+
+        /// <summary>Par arête fine : infranchissable.</summary>
+        public bool[] AreteBloquante;
+
+        /// <summary>Segments de frontière matérialisés.</summary>
+        public List<SegmentFrontiere> Segments = new List<SegmentFrontiere>();
+
+        /// <summary>Plans d'eau intérieurs.</summary>
+        public List<LacData> Lacs = new List<LacData>();
+
+        /// <summary>Par zone : borde la mer, un lac ou une rivière, et produit donc du poisson.</summary>
+        public bool[] ZoneRiveraine;
+
+        /// <summary>Par zone : contient des cellules de massif, donc recevra le terrain Montagne.</summary>
+        public bool[] ZoneMontagne;
+
+        public bool ADrapeau(int cellule, DrapeauxCellule drapeau)
+        {
+            return (Drapeaux[cellule] & (ushort)drapeau) != 0;
+        }
+
         public int NbCellules => Graphe.NbCellules;
         public int NbCoins => Graphe.NbCoins;
         public int NbAretes => Graphe.NbAretes;
