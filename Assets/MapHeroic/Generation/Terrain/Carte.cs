@@ -55,6 +55,9 @@ namespace MapHeroic.Generation.Terrain
         /// </summary>
         public float[] Durete;
 
+        /// <summary>Par arête fine : traversée par un lit de rivière.</summary>
+        public bool[] AreteRiviere;
+
         /// <summary>Chaînes de coins, de la source à l'embouchure.</summary>
         public List<int[]> Rivieres = new List<int[]>();
 
@@ -72,7 +75,45 @@ namespace MapHeroic.Generation.Terrain
         /// <summary>Graphe des zones : voisines de chacune, triées.</summary>
         public List<int>[] ZonesVoisines;
 
+        /// <summary>
+        /// Frontières entre zones voisines, avec leurs arêtes fines et leurs grandeurs
+        /// agrégées. C'est sur elles que raisonne la phase des groupes : décider si une
+        /// frontière est un bon endroit où séparer deux groupes demande de connaître sa
+        /// longueur, sa dureté et si une rivière la suit — pas de reparcourir les cellules.
+        /// </summary>
+        public AreteZones[] AretesEntreZones;
+
+        /// <summary>Par zone : index de ses frontières dans <see cref="AretesEntreZones"/>.</summary>
+        public int[][] AretesDeZone;
+
         public int NbZones => CellulesDeZone?.Length ?? 0;
+
+        // --------------------------------------------------------------- P6 : groupes
+
+        /// <summary>Par zone : index de son groupe.</summary>
+        public int[] GroupeDeZone;
+
+        /// <summary>Zones de chaque groupe (3 ou 4).</summary>
+        public List<int>[] ZonesDeGroupe;
+
+        /// <summary>Graphe des groupes : voisins de chacun, triés.</summary>
+        public List<int>[] GroupesVoisins;
+
+        public int NbGroupes => ZonesDeGroupe?.Length ?? 0;
+
+        // ------------------------------------------------------------- P7 : passages
+
+        /// <summary>Frontières entre groupes, chaînées et évaluées.</summary>
+        public FrontiereGroupes[] FrontieresGroupes;
+
+        /// <summary>Ouvertures praticables entre groupes.</summary>
+        public List<Passage> Passages = new List<Passage>();
+
+        /// <summary>
+        /// Par cellule : réservée par un passage. Aucune phase suivante n'y posera de massif,
+        /// de lac ni de lit de rivière — c'est ce qui garantit qu'un col ouvert le reste.
+        /// </summary>
+        public bool[] CelluleReservee;
 
         public int NbCellules => Graphe.NbCellules;
         public int NbCoins => Graphe.NbCoins;

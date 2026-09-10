@@ -13,6 +13,8 @@ namespace MapHeroic.Generation
         public ParametresRelief Relief = new ParametresRelief();
         public ParametresHydrologie Hydrologie = new ParametresHydrologie();
         public ParametresZones Zones = new ParametresZones();
+        public ParametresGroupes Groupes = new ParametresGroupes();
+        public ParametresPassages Passages = new ParametresPassages();
     }
 
     public sealed class RapportGeneration
@@ -24,12 +26,15 @@ namespace MapHeroic.Generation
         public DiagnosticRelief Relief;
         public DiagnosticHydrologie Hydrologie;
         public DiagnosticZones Zones;
+        public DiagnosticGroupes Groupes;
+        public DiagnosticPassages Passages;
         public long MillisecondesTotal;
 
         public override string ToString()
         {
-            if (!Reussi) return $"ÉCHEC : {MotifEchec}\n  {Maillage}\n  {Ile}\n  {Zones}";
-            return $"{MillisecondesTotal} ms\n  {Maillage}\n  {Ile}\n  {Relief}\n  {Hydrologie}\n  {Zones}";
+            if (!Reussi) return $"ÉCHEC : {MotifEchec}\n  {Maillage}\n  {Ile}\n  {Zones}\n  {Groupes}\n  {Passages}";
+            return $"{MillisecondesTotal} ms\n  {Maillage}\n  {Ile}\n  {Relief}\n  {Hydrologie}\n  " +
+                   $"{Zones}\n  {Groupes}\n  {Passages}";
         }
     }
 
@@ -87,6 +92,24 @@ namespace MapHeroic.Generation
                 return null;
             }
             rapport.Zones = diagZones;
+
+            if (!Groupes.Construire(carte, p.Groupes, racine, out DiagnosticGroupes diagGroupes))
+            {
+                rapport.Groupes = diagGroupes;
+                rapport.MotifEchec = diagGroupes.MotifEchec;
+                rapport.MillisecondesTotal = chrono.ElapsedMilliseconds;
+                return null;
+            }
+            rapport.Groupes = diagGroupes;
+
+            if (!Passages.Construire(carte, p.Passages, racine, out DiagnosticPassages diagPassages))
+            {
+                rapport.Passages = diagPassages;
+                rapport.MotifEchec = diagPassages.MotifEchec;
+                rapport.MillisecondesTotal = chrono.ElapsedMilliseconds;
+                return null;
+            }
+            rapport.Passages = diagPassages;
 
             rapport.Reussi = true;
             rapport.MillisecondesTotal = chrono.ElapsedMilliseconds;

@@ -30,6 +30,12 @@ namespace MapHeroic.Tests
 
         // ------------------------------------------------------------------- campagne
 
+        /// <summary>
+        /// On juge la phase P3 sur son propre diagnostic, pas sur la réussite du pipeline
+        /// entier : une carte rejetée plus tard par les groupes ou les passages n'est pas un
+        /// échec de l'île. Le taux de réussite de bout en bout est mesuré à part, dans
+        /// <see cref="TestsPipeline"/>.
+        /// </summary>
         [Test]
         public void Campagne_IleAcceptableEtPeuDeRejeux()
         {
@@ -38,9 +44,9 @@ namespace MapHeroic.Tests
 
             for (int i = 0; i < NbGrainesCampagne; i++)
             {
-                var carte = Generer(5000UL + (ulong)i, out RapportGeneration rapport);
+                Generer(5000UL + (ulong)i, out RapportGeneration rapport);
                 total++;
-                if (carte == null) { echecs++; continue; }
+                if (rapport.Ile == null || !rapport.Ile.Reussi) { echecs++; continue; }
 
                 rejeux += rapport.Ile.Essais - 1;
                 ratioMin = math.min(ratioMin, rapport.Ile.RatioTerre);

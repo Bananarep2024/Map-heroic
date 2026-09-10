@@ -101,6 +101,7 @@ namespace MapHeroic.Generation.Terrain
             diag.LongueurMoyenneRiviere = carte.Rivieres.Count > 0 ? (float)total / carte.Rivieres.Count : 0f;
 
             carte.Durete = CalculerDurete(g, carte, out diag.DureteMoyenneTerre);
+            carte.AreteRiviere = MarquerAretesRiviere(g, carte);
         }
 
         /// <summary>Un coin touchant une cellule de mer est un exutoire : l'eau y quitte l'île.</summary>
@@ -356,6 +357,24 @@ namespace MapHeroic.Generation.Terrain
             }
 
             return rivieres;
+        }
+
+        /// <summary>
+        /// Arêtes fines traversées par un lit de rivière. La phase des groupes en a besoin
+        /// séparément de la dureté : une rivière à l'intérieur d'un groupe est bien plus
+        /// gênante qu'une simple crête, puisqu'elle coupera le groupe en deux.
+        /// </summary>
+        static bool[] MarquerAretesRiviere(GrapheCellules g, Carte carte)
+        {
+            var estRiviere = new bool[g.NbAretes];
+            for (int e = 0; e < g.NbAretes; e++)
+            {
+                int coinA = g.AreteCoinA[e];
+                int coinB = g.AreteCoinB[e];
+                estRiviere[e] = carte.CoinRiviere[coinA] && carte.CoinRiviere[coinB]
+                                && (carte.Aval[coinA] == coinB || carte.Aval[coinB] == coinA);
+            }
+            return estRiviere;
         }
 
         /// <summary>

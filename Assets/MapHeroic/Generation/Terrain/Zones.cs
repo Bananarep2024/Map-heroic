@@ -190,6 +190,8 @@ namespace MapHeroic.Generation.Terrain
                     continue;
                 }
 
+                carte.AretesEntreZones = ConstruireFrontieres(g, carte, zoneDe, p.NbZones, out int[][] aretesDeZone);
+                carte.AretesDeZone = aretesDeZone;
                 carte.ZoneDeCellule = zoneDe;
                 carte.CellulesDeZone = cellulesDeZone;
                 carte.ZonesVoisines = voisines;
@@ -766,6 +768,81 @@ namespace MapHeroic.Generation.Terrain
 
             for (int z = 0; z < nbZones; z++) voisines[z].Sort();
             return voisines;
+        }
+
+        /// <summary>
+        /// Agrège les arêtes fines en frontières entre zones. Les phases suivantes ne
+        /// raisonnent plus qu'à ce niveau : c'est cent fois moins d'objets à parcourir, et
+        /// les grandeurs qui comptent (longueur, dureté, présence d'une rivière) y sont
+        /// déjà calculées.
+        /// </summary>
+        public static AreteZones[] ConstruireFrontieres(GrapheCellules g, Carte carte, int[] zoneDe,
+                                                        int nbZones, out int[][] aretesDeZone)
+        {
+            var parPaire = new Dictionary<long, List<int>>();
+
+            for (int e = 0; e < g.NbAretes; e++)
+            {
+                int a = g.AreteCelluleA[e];
+                int b = g.AreteCelluleB[e];
+                if (b < 0) continue;
+                int za = zoneDe[a], zb = zoneDe[b];
+                if (za < 0 || zb < 0 || za == zb) continue;
+
+                long cle = za < zb ? ((long)za << 32) | (uint)zb : ((long)zb << 32) | (uint)za;
+                if (!parPaire.TryGetValue(cle, out List<int> liste))
+                {
+                    liste = new List<int>(8);
+                    parPaire[cle] = liste;
+                }
+                liste.Add(e);
+            }
+
+            // Les clés sont triées avant construction : l'itération d'un dictionnaire n'a pas
+            // d'ordre garanti, et la numérotation des frontières doit être reproductible.
+            var cles = new long[parPaire.Count];
+            parPaire.Keys.CopyTo(cles, 0);
+            Array.Sort(cles);
+
+            var frontieres = new AreteZones[cles.Length];
+            var parZone = new List<int>[nbZones];
+            for (int z = 0; z < nbZones; z++) parZone[z] = new List<int>(8);
+
+            for (int i = 0; i < cles.Length; i++)
+            {
+                long cle = cles[i];
+                int za = (int)(cle >> 32);
+                int zb = (int)(cle & 0xFFFFFFFF);
+                List<int> aretes = parPaire[cle];
+                aretes.Sort();
+
+                double longueur = 0.0, durete = 0.0, crete = 0.0, riviere = 0.0;
+                foreach (int e in aretes)
+                {
+                    float l = g.LongueurArete[e];
+                    longueur += l;
+                    durete += l * carte.Durete[e];
+                    crete += l * 0.5f * (carte.Crete[g.AreteCelluleA[e]] + carte.Crete[g.AreteCelluleB[e]]);
+                    if (carte.AreteRiviere[e]) riviere += l;
+                }
+
+                frontieres[i] = new AreteZones
+                {
+                    ZoneA = za,
+                    ZoneB = zb,
+                    AretesFines = aretes.ToArray(),
+                    Longueur = (float)longueur,
+                    Durete = longueur > 0.0 ? (float)(durete / longueur) : 0f,
+                    Crete = longueur > 0.0 ? (float)(crete / longueur) : 0f,
+                    LongueurRiviere = (float)riviere
+                };
+                parZone[za].Add(i);
+                parZone[zb].Add(i);
+            }
+
+            aretesDeZone = new int[nbZones][];
+            for (int z = 0; z < nbZones; z++) aretesDeZone[z] = parZone[z].ToArray();
+            return frontieres;
         }
 
         /// <summary>
