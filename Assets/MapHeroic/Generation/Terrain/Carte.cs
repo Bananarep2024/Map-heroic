@@ -61,6 +61,19 @@ namespace MapHeroic.Generation.Terrain
         /// <summary>Dépressions comblées assez petites pour devenir des lacs en P8.</summary>
         public List<int[]> BassinsCandidats = new List<int[]>();
 
+        // ----------------------------------------------------------------- P5 : zones
+
+        /// <summary>Par cellule : index de zone, ou -1 en mer.</summary>
+        public int[] ZoneDeCellule;
+
+        /// <summary>Cellules de chaque zone.</summary>
+        public List<int>[] CellulesDeZone;
+
+        /// <summary>Graphe des zones : voisines de chacune, triées.</summary>
+        public List<int>[] ZonesVoisines;
+
+        public int NbZones => CellulesDeZone?.Length ?? 0;
+
         public int NbCellules => Graphe.NbCellules;
         public int NbCoins => Graphe.NbCoins;
         public int NbAretes => Graphe.NbAretes;

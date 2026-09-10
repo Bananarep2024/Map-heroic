@@ -12,6 +12,7 @@ namespace MapHeroic.Generation
         public ParametresIle Ile = new ParametresIle();
         public ParametresRelief Relief = new ParametresRelief();
         public ParametresHydrologie Hydrologie = new ParametresHydrologie();
+        public ParametresZones Zones = new ParametresZones();
     }
 
     public sealed class RapportGeneration
@@ -22,12 +23,13 @@ namespace MapHeroic.Generation
         public DiagnosticIle Ile;
         public DiagnosticRelief Relief;
         public DiagnosticHydrologie Hydrologie;
+        public DiagnosticZones Zones;
         public long MillisecondesTotal;
 
         public override string ToString()
         {
-            if (!Reussi) return $"ÉCHEC : {MotifEchec}\n  {Maillage}\n  {Ile}";
-            return $"{MillisecondesTotal} ms\n  {Maillage}\n  {Ile}\n  {Relief}\n  {Hydrologie}";
+            if (!Reussi) return $"ÉCHEC : {MotifEchec}\n  {Maillage}\n  {Ile}\n  {Zones}";
+            return $"{MillisecondesTotal} ms\n  {Maillage}\n  {Ile}\n  {Relief}\n  {Hydrologie}\n  {Zones}";
         }
     }
 
@@ -76,6 +78,15 @@ namespace MapHeroic.Generation
 
             Hydrologie.Construire(carte, p.Hydrologie, racine, out DiagnosticHydrologie diagHydro);
             rapport.Hydrologie = diagHydro;
+
+            if (!Zones.Construire(carte, p.Zones, racine, out DiagnosticZones diagZones))
+            {
+                rapport.Zones = diagZones;
+                rapport.MotifEchec = diagZones.MotifEchec;
+                rapport.MillisecondesTotal = chrono.ElapsedMilliseconds;
+                return null;
+            }
+            rapport.Zones = diagZones;
 
             rapport.Reussi = true;
             rapport.MillisecondesTotal = chrono.ElapsedMilliseconds;
