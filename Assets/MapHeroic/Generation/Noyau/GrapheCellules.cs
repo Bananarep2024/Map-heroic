@@ -3,6 +3,14 @@ using Unity.Mathematics;
 
 namespace MapHeroic.Generation.Noyau
 {
+    // Note d'architecture : les phases P0 à P11 ne doivent appeler AUCUNE API du moteur —
+    // c'est ce qui leur permet de tourner hors du thread principal et d'être testées sans
+    // ouvrir de scène. On avait tenté de le faire respecter mécaniquement par
+    // "noEngineReferences" dans l'asmdef, mais c'est impossible en Unity 6 : float2 vit
+    // désormais dans UnityEngine.MathematicsModule, donc dans le moteur. La règle reste donc
+    // une convention : hors float2/math, rien de UnityEngine ici (ni Debug.Log, ni Mathf,
+    // ni Random, ni Time, ni GameObject).
+
     /// <summary>
     /// Maillage de cellules (le diagramme de Voronoï relaxé) en Structure-of-Arrays.
     ///
