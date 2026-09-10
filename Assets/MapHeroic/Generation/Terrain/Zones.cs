@@ -47,6 +47,20 @@ namespace MapHeroic.Generation.Terrain
         public int CandidatsParTentative = 24;
 
         /// <summary>
+        /// Zones examinées par itération, en partant des extrêmes.
+        ///
+        /// Balayer les quatre-vingt-dix rendait certaines cartes très lentes : quand presque
+        /// aucun transfert n'est possible, chaque itération parcourait toutes les zones et
+        /// tous leurs candidats avant d'en trouver un, et une graine sur deux cents montait à
+        /// près de huit secondes. Les zones qui ont besoin d'un transfert sont de toute façon
+        /// aux extrémités du classement.
+        /// </summary>
+        public int ZonesExamineesParIteration = 16;
+
+        /// <summary>Itérations sans progrès de l'objectif avant d'arrêter.</summary>
+        public int SansProgresMax = 60;
+
+        /// <summary>
         /// Poids de la crête et de la dureté dans le coût de croissance, exprimés en
         /// « nombre de cellules d'avance » concédées pour éviter un franchissement.
         ///
@@ -424,6 +438,8 @@ namespace MapHeroic.Generation.Terrain
 
             var tri = new float[p.NbZones];
             var ordre = new int[p.NbZones];
+            float meilleurObjectif = float.MaxValue;
+            int sansProgres = 0;
 
             for (int iteration = 0; iteration < p.IterationsEquilibrage; iteration++)
             {
@@ -459,18 +475,35 @@ namespace MapHeroic.Generation.Terrain
                 // les clous peut avoir à transmettre à sa voisine la masse qu'elle vient de
                 // recevoir. Le critère du carré garantit qu'aucun de ces transferts
                 // intermédiaires n'aggrave l'équilibre d'ensemble.
+                int examinees = math.min(p.ZonesExamineesParIteration, p.NbZones);
                 bool fait = false;
-                for (int i = 0; i < p.NbZones && !fait; i++)
+                for (int i = 0; i < examinees && !fait; i++)
                 {
                     fait = TenterDon(g, carte, p, zoneDe, cellulesDeZone, aire, ordre[i], mediane, tampons);
                 }
-                for (int i = p.NbZones - 1; i >= 0 && !fait; i--)
+                for (int i = 0; i < examinees && !fait; i++)
                 {
-                    fait = TenterReception(g, carte, p, zoneDe, cellulesDeZone, aire, ordre[i], mediane, tampons);
+                    int z = ordre[p.NbZones - 1 - i];
+                    fait = TenterReception(g, carte, p, zoneDe, cellulesDeZone, aire, z, mediane, tampons);
                 }
 
                 if (!fait) break;                   // plus aucun transfert admissible
                 diag.NbTransferts++;
+
+                // Arrêt sur stagnation : la somme des écarts au carré ne peut que décroître,
+                // mais elle peut décroître si peu que continuer ne sert plus à rien.
+                float objectif = 0f;
+                for (int z = 0; z < p.NbZones; z++)
+                {
+                    float ecart = aire[z] - mediane;
+                    objectif += ecart * ecart;
+                }
+                if (objectif < meilleurObjectif * 0.999f)
+                {
+                    meilleurObjectif = objectif;
+                    sansProgres = 0;
+                }
+                else if (++sansProgres > p.SansProgresMax) break;
             }
         }
 

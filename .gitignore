@@ -36,6 +36,10 @@ ExportedObj/
 *.pdb.meta
 *.mdb.meta
 
+# Rapports de campagne : artefacts de mesure, regenerables a la demande
+/[Aa]ssets/MapHeroic/Rapports/
+/[Aa]ssets/MapHeroic/Rapports.meta
+
 # Rapport de crash Unity
 sysinfo.txt
 

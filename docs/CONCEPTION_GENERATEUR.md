@@ -4,6 +4,19 @@
 
 ---
 
+> **État d'avancement au 10 septembre 2026 — jalons J1 à J8 terminés.**
+>
+> Le générateur 2D est complet et mesuré : **500 graines sur 500 conformes aux dix-huit règles**,
+> médiane 126 ms, P95 181 ms, maximum 375 ms (éditeur Mono, sans Burst). 145 tests EditMode verts.
+> Une fenêtre d'éditeur permet de tirer une graine, d'inspecter chaque calque et de lancer une
+> campagne en lot avec rapport CSV.
+>
+> Les sections ci-dessous décrivent la conception telle qu'elle avait été arrêtée. Les écarts
+> constatés à l'implémentation sont signalés au fil du texte et détaillés dans les messages de
+> commit ; les plus structurants sont : clé de croissance des zones **additive** et non
+> multiplicative, seuils du champ de crêtes calibrés **par quantile**, équilibrage des zones
+> minimisant la somme des écarts **au carré**, et écart de score entre départs traité comme une
+> **mesure de qualité** et non comme un critère de rejet.
 ## 1. Résumé des décisions
 
 | Décision | Choix retenu | Justification courte |

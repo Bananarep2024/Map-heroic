@@ -61,6 +61,9 @@ namespace MapHeroic.Generation.Terrain
         /// <summary>Cellules de massif rendues praticables pour recoller une zone ou un groupe.</summary>
         public int NbCellulesLiberees;
         public int NbAretesNonBloquantes;
+
+        /// <summary>Arêtes inter-groupes hors chaîne principale, bloquées par le balayage de sûreté.</summary>
+        public int NbAretesOrphelines;
         public int NbGroupesCoupes;
         public int NbZonesCoupees;
         public int NbSocketsMines;
@@ -574,7 +577,18 @@ namespace MapHeroic.Generation.Terrain
 
                 foreach (KeyValuePair<int, int> paire in parZone)
                 {
-                    if (paire.Value > carte.CellulesDeZone[paire.Key].Count * p.PartLacMaxParZone)
+                    List<int> cellulesZone = carte.CellulesDeZone[paire.Key];
+                    if (paire.Value > cellulesZone.Count * p.PartLacMaxParZone) { acceptable = false; break; }
+
+                    // Le lac doit aussi tenir dans le plafond GLOBAL de non-constructible de
+                    // sa zone, massifs compris. Ne vérifier que sa part propre laissait passer
+                    // des zones à plus de 50 % d'inconstructible.
+                    int dejaPris = 0;
+                    foreach (int autre in cellulesZone)
+                    {
+                        if (A(carte, autre, DrapeauxCellule.NonConstructible)) dejaPris++;
+                    }
+                    if (dejaPris + paire.Value > cellulesZone.Count * p.PartNonConstructibleMax)
                     {
                         acceptable = false;
                         break;
@@ -663,14 +677,18 @@ namespace MapHeroic.Generation.Terrain
                     return a < b ? -1 : (a > b ? 1 : 0);
                 });
 
+                // On retire d'abord les épaississements, qui ne bordent aucune arête de leur
+                // segment et s'enlèvent sans ouvrir de brèche. Si cela ne suffit pas, on entame
+                // la première rangée : la brèche que cela crée sera rattrapée par
+                // MarquerBlocages, qui retypera le segment percé en cours d'eau. Un gué de plus
+                // vaut mieux qu'une zone bâtie à moins de la moitié.
                 int aRetirer = nonConstructibles.Count - plafond;
                 int retirees = 0;
                 foreach (int c in retirables)
                 {
                     if (retirees >= aRetirer) break;
-                    if (ToucheSonSegment(carte, celluleDuSegment, c)) break;   // plus rien de sûr à retirer
-                    carte.Drapeaux[c] &= unchecked((ushort)~(ushort)DrapeauxCellule.Massif);
-                    carte.Drapeaux[c] &= unchecked((ushort)~(ushort)DrapeauxCellule.NonConstructible);
+                    if (cellules.Count - (nonConstructibles.Count - retirees) < 3) break;
+                    Liberer(carte, c);
                     retirees++;
                 }
                 if (retirees > 0) diag.NbZonesAmincies++;
@@ -754,6 +772,34 @@ namespace MapHeroic.Generation.Terrain
                     carte.TypeArete[e] = TypeFrontiere.RiviereProlongee;
                     carte.AreteBloquante[e] = true;
                 }
+            }
+
+            // Balayage de sûreté sur TOUTES les arêtes inter-groupes, et pas seulement sur
+            // celles des segments.
+            //
+            // Une frontière entre deux groupes peut se présenter en plusieurs morceaux — une
+            // baie s'intercale — et le chaînage n'en retient que le plus long, pour y loger le
+            // passage. Les morceaux écartés restaient sans type, donc franchissables : une
+            // carte sur deux cents avait ainsi un couloir invisible entre deux groupes, que
+            // seule la validation finale attrapait.
+            var dePassage = new HashSet<int>();
+            foreach (Passage passage in carte.Passages)
+            {
+                foreach (int e in passage.AretesFines) dePassage.Add(e);
+            }
+
+            for (int e = 0; e < g.NbAretes; e++)
+            {
+                int a = g.AreteCelluleA[e], b = g.AreteCelluleB[e];
+                if (b < 0 || !carte.Terre[a] || !carte.Terre[b]) continue;
+                if (carte.ZoneDeCellule[a] < 0 || carte.ZoneDeCellule[b] < 0) continue;
+                if (carte.GroupeDeZone[carte.ZoneDeCellule[a]] == carte.GroupeDeZone[carte.ZoneDeCellule[b]]) continue;
+                if (dePassage.Contains(e)) continue;
+                if (carte.AreteBloquante[e]) continue;
+
+                carte.TypeArete[e] = TypeFrontiere.RiviereProlongee;
+                carte.AreteBloquante[e] = true;
+                diag.NbAretesOrphelines++;
             }
 
             foreach (SegmentFrontiere s in segments)

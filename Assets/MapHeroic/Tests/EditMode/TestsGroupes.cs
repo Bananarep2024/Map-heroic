@@ -175,12 +175,32 @@ namespace MapHeroic.Tests
             }
         }
 
+        /// <summary>
+        /// Le recuit ne peut jamais dégrader — il conserve la meilleure partition rencontrée —
+        /// mais il peut ne rien améliorer, quand la construction gloutonne a déjà trouvé un
+        /// optimum local. On vérifie donc les deux choses séparément : jamais de dégradation
+        /// sur aucune graine, et une amélioration sur la majorité d'entre elles.
+        /// </summary>
         [Test]
-        public void LeRecuitAmelioreLEnergie()
+        public void LeRecuitNeDegradeJamaisEtAmelioreSouvent()
         {
-            GenerateurCarte.Generer(81UL, new ParametresGeneration(), out RapportGeneration rapport);
-            Assert.Less(rapport.Groupes.EnergieFinale, rapport.Groupes.EnergieInitiale,
-                $"Le recuit n'a rien amélioré : {rapport.Groupes}");
+            int ameliorees = 0, total = 0;
+
+            for (ulong graine = 81UL; graine < 87UL; graine++)
+            {
+                GenerateurCarte.Generer(graine, new ParametresGeneration(), out RapportGeneration rapport);
+                DiagnosticGroupes g = rapport.Groupes;
+                total++;
+
+                Assert.LessOrEqual(g.EnergieFinale, g.EnergieInitiale,
+                    $"Graine {graine} : le recuit a dégradé la partition — {g}");
+                if (g.EnergieFinale < g.EnergieInitiale) ameliorees++;
+
+                TestContext.WriteLine($"graine {graine} : {g.EnergieInitiale:F0} → {g.EnergieFinale:F0}");
+            }
+
+            Assert.Greater(ameliorees * 2, total,
+                $"Le recuit n'améliore que {ameliorees} graines sur {total} : il ne sert à rien.");
         }
 
         [Test]
