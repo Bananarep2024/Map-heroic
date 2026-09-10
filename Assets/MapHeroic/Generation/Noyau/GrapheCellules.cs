@@ -69,6 +69,14 @@ namespace MapHeroic.Generation.Noyau
         public int[] CoinsVoisins;
         public int[] DebutCoinsVoisins;
 
+        /// <summary>
+        /// Cellules incidentes à chaque coin (CSR), triées. L'élévation et l'hydrologie
+        /// travaillent sur les coins mais lisent des grandeurs portées par les cellules
+        /// (distance à la côte, champ de crêtes) : c'est le pont entre les deux.
+        /// </summary>
+        public int[] CellulesDeCoin;
+        public int[] DebutCellulesDeCoin;
+
         public float[] Aire;
         public float[] LongueurArete;
 
@@ -225,6 +233,41 @@ namespace MapHeroic.Generation.Noyau
 
             CalculerAires();
             ConstruireGrapheCoins();
+            ConstruireCellulesDeCoin();
+        }
+
+        void ConstruireCellulesDeCoin()
+        {
+            var degre = new int[NbCoins];
+            for (int i = 0; i < CoinsDeCellule.Length; i++) degre[CoinsDeCellule[i]]++;
+
+            DebutCellulesDeCoin = new int[NbCoins + 1];
+            int cumul = 0;
+            for (int i = 0; i < NbCoins; i++)
+            {
+                DebutCellulesDeCoin[i] = cumul;
+                cumul += degre[i];
+            }
+            DebutCellulesDeCoin[NbCoins] = cumul;
+
+            CellulesDeCoin = new int[cumul];
+            var curseur = new int[NbCoins];
+            for (int i = 0; i < NbCoins; i++) curseur[i] = DebutCellulesDeCoin[i];
+
+            for (int c = 0; c < NbCellules; c++)
+            {
+                for (int s = DebutCoins[c]; s < DebutCoins[c + 1]; s++)
+                {
+                    int coin = CoinsDeCellule[s];
+                    CellulesDeCoin[curseur[coin]++] = c;
+                }
+            }
+
+            for (int i = 0; i < NbCoins; i++)
+            {
+                int deb = DebutCellulesDeCoin[i];
+                Array.Sort(CellulesDeCoin, deb, DebutCellulesDeCoin[i + 1] - deb);
+            }
         }
 
         void CalculerAires()
