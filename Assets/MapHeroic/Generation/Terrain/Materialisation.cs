@@ -1052,7 +1052,10 @@ namespace MapHeroic.Generation.Terrain
             float penteMax = math.tan(math.radians(p.PenteMaxDegres));
             float penteMassif = math.tan(math.radians(p.PenteMassifMaxDegres));
 
-            for (int passe = 0; passe < 3; passe++)
+            // Abaisser un sommet trop haut peut en rendre un autre trop raide à son tour :
+            // trois passes ne suffisaient pas toujours à converger, et une carte sur douze
+            // gardait une face au-delà de la limite.
+            for (int passe = 0; passe < 8; passe++)
             {
                 for (int e = 0; e < g.NbAretes; e++)
                 {
@@ -1101,13 +1104,36 @@ namespace MapHeroic.Generation.Terrain
             // d'après le type des segments : la réparation peut vider entièrement une bande,
             // et le segment est alors retypé en cours d'eau. S'y fier laissait des cartes
             // sans le moindre gisement de minerai.
-            carte.ZoneMontagne = new bool[carte.NbZones];
+            // Une chaîne de montagnes borde plusieurs zones, mais une seule d'entre elles
+            // porte le terrain Montagne : celle qui en contient le plus. Marquer toutes les
+            // zones qui touchent un massif en donnait seize sur quatre-vingt-dix, là où la
+            // conception en vise six à dix ; les autres gardent leurs cellules non
+            // constructibles sans devenir pour autant des zones minières.
+            var cellulesMassifParZone = new int[carte.NbZones];
             for (int c = 0; c < carte.NbCellules; c++)
             {
                 if (!A(carte, c, DrapeauxCellule.Massif)) continue;
                 int z = carte.ZoneDeCellule[c];
-                if (z >= 0) carte.ZoneMontagne[z] = true;
+                if (z >= 0) cellulesMassifParZone[z]++;
             }
+
+            var classement = new List<int>();
+            for (int z = 0; z < carte.NbZones; z++)
+            {
+                if (cellulesMassifParZone[z] > 0) classement.Add(z);
+            }
+            classement.Sort((a, b) =>
+            {
+                if (cellulesMassifParZone[a] != cellulesMassifParZone[b])
+                {
+                    return cellulesMassifParZone[b] - cellulesMassifParZone[a];
+                }
+                return a - b;
+            });
+
+            carte.ZoneMontagne = new bool[carte.NbZones];
+            int retenues = Math.Min(classement.Count, p.NbMassifsMax);
+            for (int i = 0; i < retenues; i++) carte.ZoneMontagne[classement[i]] = true;
 
             for (int zoneMontagne = 0; zoneMontagne < carte.NbZones; zoneMontagne++)
             {

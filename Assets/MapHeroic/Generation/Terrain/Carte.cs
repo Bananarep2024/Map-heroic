@@ -138,6 +138,23 @@ namespace MapHeroic.Generation.Terrain
         /// <summary>Par zone : contient des cellules de massif, donc recevra le terrain Montagne.</summary>
         public bool[] ZoneMontagne;
 
+        // ------------------------------------------------- P9 et P10 : jeu
+
+        /// <summary>Groupes de départ, dans l'ordre d'attribution aux joueurs.</summary>
+        public int[] GroupesDepart;
+
+        /// <summary>Zone de première implantation de chaque départ.</summary>
+        public int[] ZonesDepart;
+
+        /// <summary>Par zone : type de terrain.</summary>
+        public TypeTerrain[] TerrainDeZone;
+
+        /// <summary>Par zone : ressource de surface. Le poisson s'y ajoute via <see cref="ZoneRiveraine"/>.</summary>
+        public TypeRessource[] RessourceDeZone;
+
+        /// <summary>Emplacements où un pont pourra être bâti.</summary>
+        public List<EmplacementPont> Ponts = new List<EmplacementPont>();
+
         public bool ADrapeau(int cellule, DrapeauxCellule drapeau)
         {
             return (Drapeaux[cellule] & (ushort)drapeau) != 0;

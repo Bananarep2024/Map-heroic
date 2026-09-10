@@ -17,6 +17,8 @@ namespace MapHeroic.Generation
         Groupes,
         Passages,
         Materialisation,
+        Departs,
+        Terrains,
         Complet
     }
 
@@ -39,6 +41,8 @@ namespace MapHeroic.Generation
         public ParametresGroupes Groupes = new ParametresGroupes();
         public ParametresPassages Passages = new ParametresPassages();
         public ParametresMaterialisation Materialisation = new ParametresMaterialisation();
+        public ParametresDeparts Departs = new ParametresDeparts();
+        public ParametresTerrains Terrains = new ParametresTerrains();
     }
 
     public sealed class RapportGeneration
@@ -53,6 +57,8 @@ namespace MapHeroic.Generation
         public DiagnosticGroupes Groupes;
         public DiagnosticPassages Passages;
         public DiagnosticMaterialisation Materialisation;
+        public DiagnosticDeparts Departs;
+        public DiagnosticTerrains Terrains;
         public long MillisecondesTotal;
 
         public override string ToString()
@@ -63,7 +69,7 @@ namespace MapHeroic.Generation
                        $"{Passages}\n  {Materialisation}";
             }
             return $"{MillisecondesTotal} ms\n  {Maillage}\n  {Ile}\n  {Relief}\n  {Hydrologie}\n  " +
-                   $"{Zones}\n  {Groupes}\n  {Passages}\n  {Materialisation}";
+                   $"{Zones}\n  {Groupes}\n  {Passages}\n  {Materialisation}\n  {Departs}\n  {Terrains}";
         }
     }
 
@@ -155,6 +161,26 @@ namespace MapHeroic.Generation
                 return null;
             }
             rapport.Materialisation = diagMat;
+            if (p.PhaseFinale == PhaseGeneration.Materialisation) return Terminer(rapport, carte, chrono);
+
+            if (!Departs.Construire(carte, p.Departs, racine, out DiagnosticDeparts diagDeparts))
+            {
+                rapport.Departs = diagDeparts;
+                rapport.MotifEchec = diagDeparts.MotifEchec;
+                rapport.MillisecondesTotal = chrono.ElapsedMilliseconds;
+                return null;
+            }
+            rapport.Departs = diagDeparts;
+            if (p.PhaseFinale == PhaseGeneration.Departs) return Terminer(rapport, carte, chrono);
+
+            if (!AffectationTerrains.Construire(carte, p.Terrains, racine, out DiagnosticTerrains diagTerrains))
+            {
+                rapport.Terrains = diagTerrains;
+                rapport.MotifEchec = diagTerrains.MotifEchec;
+                rapport.MillisecondesTotal = chrono.ElapsedMilliseconds;
+                return null;
+            }
+            rapport.Terrains = diagTerrains;
 
             return Terminer(rapport, carte, chrono);
         }
