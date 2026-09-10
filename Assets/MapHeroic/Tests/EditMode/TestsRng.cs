@@ -1,5 +1,11 @@
 using MapHeroic.Generation.Noyau;
 using NUnit.Framework;
+// AllocatingGCMemory est une méthode d'extension : l'espace de noms doit être importé,
+// qualifier la classe Is ne suffit pas. Comme NUnit et Unity exposent chacun une classe Is,
+// l'alias ci-dessous garde celle de NUnit par défaut ; celle d'Unity est qualifiée au
+// point d'usage, dans le test d'allocation.
+using UnityEngine.TestTools.Constraints;
+using Is = NUnit.Framework.Is;
 
 namespace MapHeroic.Tests
 {
